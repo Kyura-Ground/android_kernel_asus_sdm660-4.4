@@ -57,6 +57,8 @@ config DISABLE_NET_SKB_FRAG_CACHE
 	  targets because it reduces memory pressure.
 
 	  If you are unsure how to answer this question, answer N.
+config NET_EGRESS
+	bool
 
 menu "Networking options"
 
