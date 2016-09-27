@@ -2129,7 +2129,7 @@ out_free:
 	for (idx = 0; idx < nbuf; idx++) {
 		struct pipe_buffer *buf = &bufs[idx];
 		if (buf->ops)
-			buf->ops->release(pipe, buf);
+			pipe_buf_release(pipe, buf);
 	}
 	pipe_unlock(pipe);
 
