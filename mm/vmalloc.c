@@ -1551,6 +1551,9 @@ static void __vunmap(const void *addr, int deallocate_pages)
 	debug_check_no_obj_freed(addr, get_vm_area_size(area));
 
 	remove_vm_area(addr);
+	/* ARM64 4.4 permission changes leave the direct map untouched. */
+	if (area->flags & VM_FLUSH_RESET_PERMS)
+		vm_unmap_aliases();
 	if (deallocate_pages) {
 		int i;
 
