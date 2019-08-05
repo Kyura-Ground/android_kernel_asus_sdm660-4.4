@@ -631,6 +631,8 @@ resizefs_out:
 #ifdef CONFIG_EXT4_FS_ENCRYPTION
 	case FS_IOC_ADD_ENCRYPTION_KEY:
 		return ext4_ioctl_add_key(filp, (void __user *)arg);
+	/* V1 descriptors are global and both removal forms require admin. */
+	case FS_IOC_REMOVE_ENCRYPTION_KEY_ALL_USERS:
 	case FS_IOC_REMOVE_ENCRYPTION_KEY:
 		return ext4_ioctl_remove_key(filp, (void __user *)arg);
 	case FS_IOC_GET_ENCRYPTION_KEY_STATUS:
@@ -785,6 +787,7 @@ long ext4_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case EXT4_IOC_RESIZE_FS:
 	case EXT4_IOC_PRECACHE_EXTENTS:
 	case FS_IOC_ADD_ENCRYPTION_KEY:
+	case FS_IOC_REMOVE_ENCRYPTION_KEY_ALL_USERS:
 	case FS_IOC_REMOVE_ENCRYPTION_KEY:
 	case FS_IOC_GET_ENCRYPTION_KEY_STATUS:
 	case EXT4_IOC_SET_ENCRYPTION_POLICY:

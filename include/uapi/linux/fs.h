@@ -247,6 +247,7 @@ struct fscrypt_add_key_arg {
 struct fscrypt_remove_key_arg {
 	struct fscrypt_key_specifier key_spec;
 #define FSCRYPT_KEY_REMOVAL_STATUS_FLAG_FILES_BUSY 0x00000001
+#define FSCRYPT_KEY_REMOVAL_STATUS_FLAG_OTHER_USERS 0x00000002
 	__u32 removal_status_flags;
 	__u32 __reserved[5];
 };
@@ -268,6 +269,8 @@ struct fscrypt_get_key_status_arg {
 #define FS_IOC_ADD_ENCRYPTION_KEY _IOWR('f', 23, struct fscrypt_add_key_arg)
 #define FS_IOC_REMOVE_ENCRYPTION_KEY \
 	_IOWR('f', 24, struct fscrypt_remove_key_arg)
+#define FS_IOC_REMOVE_ENCRYPTION_KEY_ALL_USERS \
+	_IOWR('f', 25, struct fscrypt_remove_key_arg)
 
 /*
  * Inode flags (FS_IOC_GETFLAGS / FS_IOC_SETFLAGS)
