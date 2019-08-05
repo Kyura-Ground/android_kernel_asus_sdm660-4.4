@@ -2369,10 +2369,13 @@ int __init ext4_init_keyring(void);
 void ext4_exit_keyring(void);
 void ext4_free_keyring(struct super_block *sb);
 int ext4_ioctl_add_key(struct file *filp, void __user *arg);
+int ext4_ioctl_remove_key(struct file *filp, void __user *arg);
+int ext4_crypto_drop_inode(struct inode *inode);
 #else
 static inline int ext4_init_keyring(void) { return 0; }
 static inline void ext4_exit_keyring(void) { }
 static inline void ext4_free_keyring(struct super_block *sb) { }
+static inline int ext4_crypto_drop_inode(struct inode *inode) { return 0; }
 #endif
 
 /* crypto_key.c */

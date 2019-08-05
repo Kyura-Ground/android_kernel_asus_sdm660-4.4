@@ -444,3 +444,16 @@ int ext4_has_encryption_key(struct inode *inode)
 
 	return (ei->i_crypt_info != NULL);
 }
+
+/* Evict unused inodes as soon as their filesystem master key is removed. */
+int ext4_crypto_drop_inode(struct inode *inode)
+{
+	const struct ext4_crypt_info *ci =
+		READ_ONCE(EXT4_I(inode)->i_crypt_info);
+	const struct ext4_master_key *mk;
+
+	if (!ci || !ci->ci_fs_master_key)
+		return 0;
+	mk = ci->ci_fs_master_key->payload.data[0];
+	return !is_master_key_secret_present(&mk->mk_secret);
+}
