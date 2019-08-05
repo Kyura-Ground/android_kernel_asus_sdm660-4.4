@@ -83,6 +83,9 @@ struct ext4_crypt_info {
 	char		ci_flags;
 	struct crypto_ablkcipher *ci_ctfm;
 	struct key	*ci_keyring_key;
+	struct key	*ci_fs_master_key;
+	struct inode	*ci_inode;
+	struct list_head ci_master_key_link;
 	char		ci_master_key[EXT4_KEY_DESCRIPTOR_SIZE];
 	char		ci_raw_key[EXT4_MAX_KEY_SIZE];
 };

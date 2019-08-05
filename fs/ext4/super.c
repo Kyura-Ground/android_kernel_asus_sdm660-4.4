@@ -819,6 +819,7 @@ static void ext4_put_super(struct super_block *sb)
 	del_timer_sync(&sbi->s_err_report);
 	ext4_release_system_zone(sb);
 	ext4_mb_release(sb);
+	ext4_free_keyring(sb);
 	ext4_ext_release(sb);
 
 	if (!(sb->s_flags & MS_RDONLY) && !aborted) {
@@ -5623,9 +5624,13 @@ static int __init ext4_init_fs(void)
 	if (err)
 		return err;
 
-	err = ext4_init_pageio();
+	err = ext4_init_keyring();
 	if (err)
 		goto out5;
+
+	err = ext4_init_pageio();
+	if (err)
+		goto out_keyring;
 
 	err = ext4_init_system_zone();
 	if (err)
@@ -5663,6 +5668,8 @@ out3:
 	ext4_exit_system_zone();
 out4:
 	ext4_exit_pageio();
+out_keyring:
+	ext4_exit_keyring();
 out5:
 	ext4_exit_es();
 
@@ -5677,6 +5684,7 @@ static void __exit ext4_exit_fs(void)
 	unregister_as_ext3();
 	unregister_filesystem(&ext4_fs_type);
 	destroy_inodecache();
+	ext4_exit_keyring();
 	ext4_exit_mballoc();
 	ext4_exit_sysfs();
 	ext4_exit_system_zone();

@@ -223,6 +223,29 @@ struct fscrypt_key {
 	__u32 size;
 };
 
+/* Filesystem-level key management for v1 encryption policies. */
+#define FSCRYPT_KEY_DESCRIPTOR_SIZE FS_KEY_DESCRIPTOR_SIZE
+#define FSCRYPT_MAX_KEY_SIZE FS_MAX_KEY_SIZE
+#define FSCRYPT_KEY_SPEC_TYPE_DESCRIPTOR 1
+
+struct fscrypt_key_specifier {
+	__u32 type;
+	__u32 __reserved;
+	union {
+		__u8 __reserved[32];
+		__u8 descriptor[FSCRYPT_KEY_DESCRIPTOR_SIZE];
+	} u;
+};
+
+struct fscrypt_add_key_arg {
+	struct fscrypt_key_specifier key_spec;
+	__u32 raw_size;
+	__u32 __reserved[9];
+	__u8 raw[];
+};
+
+#define FS_IOC_ADD_ENCRYPTION_KEY _IOWR('f', 23, struct fscrypt_add_key_arg)
+
 /*
  * Inode flags (FS_IOC_GETFLAGS / FS_IOC_SETFLAGS)
  */

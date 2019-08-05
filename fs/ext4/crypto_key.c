@@ -16,6 +16,7 @@
 
 #include "ext4.h"
 #include "ext4_ice.h"
+#include "crypto_keyring.h"
 #include "xattr.h"
 
 static void derive_crypt_complete(struct crypto_async_request *req, int rc)
@@ -171,12 +172,26 @@ static int ext4_derive_key(const struct ext4_encryption_context *ctx,
 
 void ext4_free_crypt_info(struct ext4_crypt_info *ci)
 {
+	struct key *key;
+
 	if (!ci)
 		return;
 
+	key = ci->ci_fs_master_key;
+	if (key) {
+		struct ext4_master_key *mk = key->payload.data[0];
+
+		spin_lock(&mk->mk_decrypted_inodes_lock);
+		list_del(&ci->ci_master_key_link);
+		spin_unlock(&mk->mk_decrypted_inodes_lock);
+		if (refcount_dec_and_test(&mk->mk_refcount))
+			key_invalidate(key);
+		key_put(key);
+	}
 	if (ci->ci_keyring_key)
 		key_put(ci->ci_keyring_key);
 	crypto_free_ablkcipher(ci->ci_ctfm);
+	memzero_explicit(ci->ci_raw_key, sizeof(ci->ci_raw_key));
 	kmem_cache_free(ext4_crypt_info_cachep, ci);
 }
 
@@ -210,6 +225,10 @@ int _ext4_get_encryption_info(struct inode *inode)
 	char full_key_descriptor[EXT4_KEY_DESC_PREFIX_SIZE +
 				 (EXT4_KEY_DESCRIPTOR_SIZE * 2) + 1];
 	struct key *keyring_key = NULL;
+	struct key *fs_master_key = NULL;
+	struct fscrypt_key_specifier spec = {
+		.type = FSCRYPT_KEY_SPEC_TYPE_DESCRIPTOR,
+	};
 	struct ext4_encryption_key *master_key;
 	struct ext4_encryption_context ctx;
 	const struct user_key_payload *ukp;
@@ -258,6 +277,8 @@ retry:
 	crypt_info->ci_filename_mode = ctx.filenames_encryption_mode;
 	crypt_info->ci_ctfm = NULL;
 	crypt_info->ci_keyring_key = NULL;
+	crypt_info->ci_fs_master_key = NULL;
+	crypt_info->ci_inode = inode;
 	memcpy(crypt_info->ci_master_key, ctx.master_key_descriptor,
 	       sizeof(crypt_info->ci_master_key));
 	if (S_ISDIR(inode->i_mode) || S_ISLNK(inode->i_mode))
@@ -289,6 +310,33 @@ retry:
 		memset(crypt_info->ci_raw_key, 0x42, EXT4_AES_256_XTS_KEY_SIZE);
 		goto got_key;
 	}
+	memcpy(spec.u.descriptor, ctx.master_key_descriptor,
+	       EXT4_KEY_DESCRIPTOR_SIZE);
+	fs_master_key = ext4_find_master_key(inode->i_sb, &spec);
+	if (IS_ERR(fs_master_key)) {
+		res = PTR_ERR(fs_master_key);
+		fs_master_key = NULL;
+		if (res != -ENOKEY)
+			goto out;
+		goto legacy_key;
+	}
+	down_read(&fs_master_key->sem);
+	{
+		struct ext4_master_key *mk = fs_master_key->payload.data[0];
+
+		if (!is_master_key_secret_present(&mk->mk_secret) ||
+		    mk->mk_secret.size != EXT4_MAX_KEY_SIZE) {
+			res = -ENOKEY;
+			goto out;
+		}
+		res = ext4_derive_key(&ctx, mk->mk_secret.raw,
+				      crypt_info->ci_raw_key);
+		if (res)
+			goto out;
+	}
+	goto got_key;
+
+legacy_key:
 	memcpy(full_key_descriptor, EXT4_KEY_DESC_PREFIX,
 	       EXT4_KEY_DESC_PREFIX_SIZE);
 	sprintf(full_key_descriptor + EXT4_KEY_DESC_PREFIX_SIZE,
@@ -364,17 +412,28 @@ got_key:
 		res = -EINVAL;
 		goto out;
 	}
-	if (cmpxchg(&ei->i_crypt_info, NULL, crypt_info) != NULL) {
-		ext4_free_crypt_info(crypt_info);
-		goto retry;
-	}
-	return 0;
+	if (!cmpxchg(&ei->i_crypt_info, NULL, crypt_info)) {
+		if (fs_master_key) {
+			struct ext4_master_key *mk =
+				fs_master_key->payload.data[0];
 
+			refcount_inc(&mk->mk_refcount);
+			crypt_info->ci_fs_master_key = key_get(fs_master_key);
+			spin_lock(&mk->mk_decrypted_inodes_lock);
+			list_add(&crypt_info->ci_master_key_link,
+				 &mk->mk_decrypted_inodes);
+			spin_unlock(&mk->mk_decrypted_inodes_lock);
+		}
+		crypt_info = NULL;
+	}
+	res = 0;
 out:
+	if (fs_master_key) {
+		up_read(&fs_master_key->sem);
+		key_put(fs_master_key);
+	}
 	if (res == -ENOKEY)
 		res = 0;
-	memzero_explicit(crypt_info->ci_raw_key,
-		sizeof(crypt_info->ci_raw_key));
 	ext4_free_crypt_info(crypt_info);
 	return res;
 }

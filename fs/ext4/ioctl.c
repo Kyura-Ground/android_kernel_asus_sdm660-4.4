@@ -628,6 +628,10 @@ resizefs_out:
 	}
 	case EXT4_IOC_PRECACHE_EXTENTS:
 		return ext4_ext_precache(inode);
+#ifdef CONFIG_EXT4_FS_ENCRYPTION
+	case FS_IOC_ADD_ENCRYPTION_KEY:
+		return ext4_ioctl_add_key(filp, (void __user *)arg);
+#endif
 	case EXT4_IOC_SET_ENCRYPTION_POLICY: {
 #ifdef CONFIG_EXT4_FS_ENCRYPTION
 		struct ext4_encryption_policy policy;
@@ -776,6 +780,7 @@ long ext4_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case EXT4_IOC_MOVE_EXT:
 	case EXT4_IOC_RESIZE_FS:
 	case EXT4_IOC_PRECACHE_EXTENTS:
+	case FS_IOC_ADD_ENCRYPTION_KEY:
 	case EXT4_IOC_SET_ENCRYPTION_POLICY:
 	case EXT4_IOC_GET_ENCRYPTION_PWSALT:
 	case EXT4_IOC_GET_ENCRYPTION_POLICY:

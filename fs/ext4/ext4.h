@@ -1298,6 +1298,9 @@ struct ext4_super_block {
  * fourth extended-fs super-block data in memory
  */
 struct ext4_sb_info {
+#ifdef CONFIG_EXT4_FS_ENCRYPTION
+	struct key *s_master_keys;
+#endif
 	unsigned long s_desc_size;	/* Size of a group descriptor in bytes */
 	unsigned long s_inodes_per_block;/* Number of inodes per block */
 	unsigned long s_blocks_per_group;/* Number of blocks in a group */
@@ -2359,6 +2362,18 @@ static inline int ext4_fname_setup_filename(struct inode *dir,
 static inline void ext4_fname_free_filename(struct ext4_filename *fname) { }
 #endif
 
+
+/* crypto_keyring.c */
+#ifdef CONFIG_EXT4_FS_ENCRYPTION
+int __init ext4_init_keyring(void);
+void ext4_exit_keyring(void);
+void ext4_free_keyring(struct super_block *sb);
+int ext4_ioctl_add_key(struct file *filp, void __user *arg);
+#else
+static inline int ext4_init_keyring(void) { return 0; }
+static inline void ext4_exit_keyring(void) { }
+static inline void ext4_free_keyring(struct super_block *sb) { }
+#endif
 
 /* crypto_key.c */
 void ext4_free_crypt_info(struct ext4_crypt_info *ci);
