@@ -2370,6 +2370,7 @@ void ext4_exit_keyring(void);
 void ext4_free_keyring(struct super_block *sb);
 int ext4_ioctl_add_key(struct file *filp, void __user *arg);
 int ext4_ioctl_remove_key(struct file *filp, void __user *arg);
+int ext4_ioctl_get_key_status(struct file *filp, void __user *arg);
 int ext4_crypto_drop_inode(struct inode *inode);
 #else
 static inline int ext4_init_keyring(void) { return 0; }

@@ -633,6 +633,8 @@ resizefs_out:
 		return ext4_ioctl_add_key(filp, (void __user *)arg);
 	case FS_IOC_REMOVE_ENCRYPTION_KEY:
 		return ext4_ioctl_remove_key(filp, (void __user *)arg);
+	case FS_IOC_GET_ENCRYPTION_KEY_STATUS:
+		return ext4_ioctl_get_key_status(filp, (void __user *)arg);
 #endif
 	case EXT4_IOC_SET_ENCRYPTION_POLICY: {
 #ifdef CONFIG_EXT4_FS_ENCRYPTION
@@ -784,6 +786,7 @@ long ext4_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case EXT4_IOC_PRECACHE_EXTENTS:
 	case FS_IOC_ADD_ENCRYPTION_KEY:
 	case FS_IOC_REMOVE_ENCRYPTION_KEY:
+	case FS_IOC_GET_ENCRYPTION_KEY_STATUS:
 	case EXT4_IOC_SET_ENCRYPTION_POLICY:
 	case EXT4_IOC_GET_ENCRYPTION_PWSALT:
 	case EXT4_IOC_GET_ENCRYPTION_POLICY:
