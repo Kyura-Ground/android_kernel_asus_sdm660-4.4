@@ -1695,6 +1695,7 @@ long qcedev_ioctl(struct file *file, unsigned cmd, unsigned long arg)
 			err = -ENOTTY;
 			goto exit_free_qcedev_areq;
 		}
+		/* Fall-through */
 	case QCEDEV_IOCTL_SHA_UPDATE_REQ:
 		{
 		struct scatterlist sg_src;
@@ -1745,9 +1746,10 @@ long qcedev_ioctl(struct file *file, unsigned cmd, unsigned long arg)
 				handle->sha_ctxt.diglen);
 		mutex_unlock(&hash_access_lock);
 		if (copy_to_user((void __user *)arg, &qcedev_areq->sha_op_req,
-					sizeof(struct qcedev_sha_op_req)))
+					sizeof(struct qcedev_sha_op_req))) {
 			err = -EFAULT;
 			goto exit_free_qcedev_areq;
+		}
 		}
 		break;
 
