@@ -455,5 +455,8 @@ int ext4_crypto_drop_inode(struct inode *inode)
 	if (!ci || !ci->ci_fs_master_key)
 		return 0;
 	mk = ci->ci_fs_master_key->payload.data[0];
+	/* Do not discard writes dirtied after the removal ioctl's sync. */
+	if (inode->i_state & I_DIRTY_ALL)
+		return 0;
 	return !is_master_key_secret_present(&mk->mk_secret);
 }
