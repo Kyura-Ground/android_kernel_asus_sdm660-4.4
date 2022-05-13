@@ -994,6 +994,7 @@ int snd_pcm_attach_substream(struct snd_pcm *pcm, int stream,
 	runtime = kzalloc(sizeof(*runtime), GFP_KERNEL);
 	if (runtime == NULL)
 		return -ENOMEM;
+	mutex_init(&runtime->buffer_mutex);
 
 	size = PAGE_ALIGN(sizeof(struct snd_pcm_mmap_status));
 	runtime->status = snd_malloc_pages(size, GFP_KERNEL);
