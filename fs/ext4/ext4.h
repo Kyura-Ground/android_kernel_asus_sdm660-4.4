@@ -2114,6 +2114,10 @@ ext4_group_first_block_no(struct super_block *sb, ext4_group_t group_no)
  */
 #define ERR_BAD_DX_DIR	(-(MAX_ERRNO - 1))
 
+/* htree levels for ext4 */
+#define	EXT4_HTREE_LEVEL_COMPAT	2
+#define	EXT4_HTREE_LEVEL	3
+
 /*
  * Timeout and state flag for lazy initialization inode thread.
  */
