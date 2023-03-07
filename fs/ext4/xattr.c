@@ -1482,6 +1482,9 @@ out:
 	if (ext4_has_inline_data(inode))
 		error = ext4_find_inline_data_nolock(inode);
 
+	if (ext4_has_inline_data(inode))
+		error = ext4_find_inline_data_nolock(inode);
+
 cleanup:
 	kfree(b_entry_name);
 	kfree(buffer);
