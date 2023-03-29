@@ -636,7 +636,7 @@ $(error "Clang with Android --target detected. Did you specify CLANG_TRIPLE?")
 endif
 endif
 ifneq ($(LLVM_IAS),1)
-CLANG_FLAGS	+= -no-integrated-as
+CLANG_FLAGS	+= -fno-integrated-as
 GCC_TOOLCHAIN_DIR := $(dir $(shell which $(CROSS_COMPILE)elfedit))
 CLANG_FLAGS	+= --prefix=$(GCC_TOOLCHAIN_DIR)$(notdir $(CROSS_COMPILE))
 endif
