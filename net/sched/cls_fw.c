@@ -227,6 +227,11 @@ fw_change_attrs(struct net *net, struct tcf_proto *tp, struct fw_filter *f,
 		tcf_bind_filter(tp, &f->res, base);
 	}
 
+	if (tb[TCA_FW_CLASSID]) {
+		f->res.classid = nla_get_u32(tb[TCA_FW_CLASSID]);
+		tcf_bind_filter(tp, &f->res, base);
+	}
+
 	return 0;
 errout:
 	tcf_exts_destroy(&e);
