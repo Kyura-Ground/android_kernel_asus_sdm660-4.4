@@ -1,0 +1,198 @@
+name: Compile Kernel for X00TD
+
+on:
+  workflow_dispatch:
+    inputs:
+      enable_ksu:
+        description: 'Enable KernelSU (1 = yes, 0 = no)'
+        required: true
+        default: '1'
+        type: choice
+        options:
+          - '1'
+          - '0'
+      kernel_name:
+        description: 'Kernel local version name (replaces "-perf" in CONFIG_LOCALVERSION)'
+        required: true
+        default: 'Caelestia-HMP'
+
+jobs:
+  compile:
+    runs-on: ubuntu-24.04
+    env:
+      DEVICE_TARGET: X00TD
+      KBUILD_BUILD_USER: KenQ
+      KBUILD_BUILD_HOST: project
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Build Environment
+        run: |
+          # Update package manager
+          sudo apt-get update
+
+          # Install dependencies
+          sudo apt-get install -y \
+            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
+            gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi \
+            libarchive-tools zstd ccache \
+            --no-install-recommends
+
+      - name: Pull toolchain
+        run: |
+          git clone --depth=1 https://github.com/picasso09/clang-9.0.3-r353983c1 clang
+          git clone --depth=1 https://github.com/KudProject/aarch64-linux-android-4.9 GCC64
+          git clone --depth=1 https://github.com/KudProject/arm-linux-androideabi-4.9 GCC32
+
+      - name: Cache Ccache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-
+
+      - name: Run KernelSU setup
+        if: ${{ github.event.inputs.enable_ksu == '1' }}
+        run: |
+          curl -LSs "https://raw.githubusercontent.com/backslashxx/KernelSU/master/kernel/setup.sh" | bash -s master
+
+      - name: Set Kernel Local Version
+        run: |
+          KERNEL_VER=$(grep -m1 '^VERSION' Makefile | awk '{print $3}')
+          KERNEL_PATCH=$(grep -m1 '^PATCHLEVEL' Makefile | awk '{print $3}')
+          KERNEL_SUB=$(grep -m1 '^SUBLEVEL' Makefile | awk '{print $3}')
+          BUILD_DATE=$(date +%Y%m%d)
+          # Full name for ZIP & artifact (kernel prepends its own version)
+          LOCAL_VERSION="${KERNEL_VER}.${KERNEL_PATCH}.${KERNEL_SUB}-${{ github.event.inputs.kernel_name }}-${BUILD_DATE}-${{ github.run_number }}"
+          echo "Local version: $LOCAL_VERSION"
+          # CONFIG_LOCALVERSION is only a suffix, not full version
+          sed -i "s/CONFIG_LOCALVERSION=\".*\"/CONFIG_LOCALVERSION=\"-${{ github.event.inputs.kernel_name }}\"/" arch/arm64/configs/X00TD_defconfig
+          echo "LOCAL_VERSION=${LOCAL_VERSION}" >> $GITHUB_ENV
+
+      - name: Compile Kernel
+        run: |
+          export KBUILD_BUILD_USER="KenQ"
+          export KBUILD_BUILD_HOST="project"
+          export LD_LIBRARY_PATH="$GITHUB_WORKSPACE/clang/lib64:${LD_LIBRARY_PATH}"
+          export PATH=$GITHUB_WORKSPACE/clang/bin:$GITHUB_WORKSPACE/GCC64/bin:$GITHUB_WORKSPACE/GCC32/bin:${PATH}
+          export KBUILD_COMPILER_STRING=$($GITHUB_WORKSPACE/clang/bin/clang --version | head -n 1 | perl -pe 's/\(http.*?\)//gs' | sed -e 's/  */ /g' -e 's/[[:space:]]*$//')
+          echo "BUILD_START=$(date +%s)" >> $GITHUB_ENV
+          echo "COMPILER_STRING=${KBUILD_COMPILER_STRING}" >> $GITHUB_ENV
+
+          # Configure ccache
+          ccache -M 5G
+          ccache -z
+
+          mkdir -p out
+
+          args=(
+            ARCH=arm64
+            O=out
+            CC="ccache $GITHUB_WORKSPACE/clang/bin/clang"
+            CXX="ccache $GITHUB_WORKSPACE/clang/bin/clang++"
+            HOSTCC="ccache $GITHUB_WORKSPACE/clang/bin/clang"
+            HOSTCXX="ccache $GITHUB_WORKSPACE/clang/bin/clang++"
+            HOSTAR=$GITHUB_WORKSPACE/clang/bin/llvm-ar
+            NM=$GITHUB_WORKSPACE/clang/bin/llvm-nm
+            AR=$GITHUB_WORKSPACE/clang/bin/llvm-ar
+            STRIP=$GITHUB_WORKSPACE/clang/bin/llvm-strip
+            OBJCOPY=$GITHUB_WORKSPACE/clang/bin/llvm-objcopy
+            OBJDUMP=$GITHUB_WORKSPACE/clang/bin/llvm-objdump
+            OBJSIZE=$GITHUB_WORKSPACE/clang/bin/llvm-size
+            READELF=$GITHUB_WORKSPACE/clang/bin/llvm-readelf
+            CROSS_COMPILE=aarch64-linux-android-
+            CROSS_COMPILE_ARM32=arm-linux-androideabi-
+            CLANG_TRIPLE=aarch64-linux-gnu-
+          )
+
+          # Load defconfig
+          make "${args[@]}" X00TD_defconfig
+
+          # Compile
+          make -j$(nproc --all) "${args[@]}" Image.gz-dtb 2>&1 | tee out/build.log
+
+          # Print ccache statistics
+          ccache -s
+
+      - name: Package Kernel (AnyKernel3)
+        if: success()
+        run: |
+          git clone --depth=1 https://github.com/Kyura-Ground/AnyKernel3 -b 4.4 AnyKernel3
+          cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/
+
+      - name: Sign ZIP (ZipSigner)
+        if: success()
+        run: |
+          ZIP_NAME="${{ env.LOCAL_VERSION }}"
+          ZIPSIGNER_JAR="zipsigner.jar"
+
+          # Create ZIP from AnyKernel3
+          cd AnyKernel3
+          zip -r9 "../${ZIP_NAME}.zip" .
+          cd ..
+
+          # Download ZipSigner
+          wget -qO "${ZIPSIGNER_JAR}" "https://github.com/Magisk-Modules-Repo/zipsigner/raw/master/bin/zipsigner-3.0-dexed.jar"
+
+          # Sign ZIP
+          java -jar "${ZIPSIGNER_JAR}" "${ZIP_NAME}.zip" "${ZIP_NAME}-signed.zip"
+          rm -f "${ZIP_NAME}.zip"
+
+          echo "SIGNED_ZIP=${ZIP_NAME}-signed.zip" >> $GITHUB_ENV
+
+      - name: Upload to Pixeldrain
+        if: success()
+        run: |
+          RESPONSE=$(curl -sT "${{ env.SIGNED_ZIP }}" \
+            -u ":${{ secrets.PIXELDRAIN_API_KEY }}" \
+            https://pixeldrain.com/api/file/)
+          FILE_ID=$(echo "$RESPONSE" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
+          if [ -z "$FILE_ID" ]; then
+            echo "Pixeldrain upload failed: $RESPONSE"
+            exit 1
+          fi
+          echo "Pixeldrain link: https://pixeldrain.com/u/${FILE_ID}"
+
+      - name: Mirror to Telegram
+        if: success()
+        run: |
+          BUILD_END=$(date +%s)
+          ELAPSED=$(( BUILD_END - ${{ env.BUILD_START }} ))
+          HOURS=$(( ELAPSED / 3600 ))
+          MINUTES=$(( (ELAPSED % 3600) / 60 ))
+          SECONDS=$(( ELAPSED % 60 ))
+
+          BRANCH="${{ github.ref_name }}"
+          KSU_STATUS=$( [ "${{ github.event.inputs.enable_ksu }}" = "1" ] && echo "Enabled" || echo "Disabled" )
+          MD5=$(md5sum "${{ env.SIGNED_ZIP }}" | awk '{print $1}')
+
+          CAPTION="Build succeeded in ${HOURS}h ${MINUTES}m ${SECONDS}s
+          Device: ${{ env.DEVICE_TARGET }}
+          Branch: ${BRANCH}
+          KernelSU: ${KSU_STATUS}
+          md5: ${MD5}
+          Compiler: ${{ env.COMPILER_STRING }}"
+
+          curl -sF "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -F "document=@${{ env.SIGNED_ZIP }}" \
+            -F "caption=${CAPTION}" \
+            "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendDocument"
+
+      - name: Upload Artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.LOCAL_VERSION }}
+          path: ${{ env.SIGNED_ZIP }}
+          retention-days: 7
+
+      - name: Upload Build Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ env.DEVICE_TARGET }}
+          path: out/build.log
+          retention-days: 3
