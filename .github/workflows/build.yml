@@ -1,0 +1,97 @@
+name: Compile Kernel for X00TD
+
+on:
+  workflow_dispatch:
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    env:
+      DEVICE_TARGET: X00TD
+      KBUILD_BUILD_USER: KenQ
+      KBUILD_BUILD_HOST: project
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Build Environment
+        run: |
+          # Update package manager
+          sudo apt-get update
+          
+          # Install dependencies
+          sudo apt-get install -y \
+            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
+            gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi \
+            libarchive-tools \
+            --no-install-recommends
+          
+          # Setup Clang toolchain with antman
+          export KERNELDIR="$(pwd)"
+          mkdir -p clang && cd clang
+          curl -s "https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman" -o antman
+          bash antman -S=09092023
+          bash antman --patch=glibc
+          cd "$KERNELDIR"
+          
+          # Verify clang installation
+          if ! [ -f "$KERNELDIR/clang/bin/clang" ]; then
+            echo "Clang setup failed! Aborting..."
+            exit 1
+          fi
+
+      - name: Run KernelSU setup
+        run: |
+          curl -LSs "https://raw.githubusercontent.com/backslashxx/KernelSU/master/kernel/setup.sh" | bash -s master
+
+
+
+      - name: Compile Kernel
+        run: |
+          export KERNELDIR="$(pwd)"
+          export KBUILD_COMPILER_STRING=$($KERNELDIR/clang/bin/clang --version | head -n 1 | perl -pe 's/\(http.*?\)//gs' | sed -e 's/  */ /g' -e 's/[[:space:]]*$//')
+          
+          mkdir -p out
+
+          make O=out ARCH=arm64 \
+            CC="$KERNELDIR/clang/bin/clang" \
+            CROSS_COMPILE="$KERNELDIR/clang/bin/aarch64-linux-gnu-" \
+            CROSS_COMPILE_ARM32="$KERNELDIR/clang/bin/arm-linux-gnueabi-" \
+            X00TD_defconfig
+
+          make -j$(nproc --all) O=out ARCH=arm64 \
+            LD="$KERNELDIR/clang/bin/ld.lld" \
+            CC="$KERNELDIR/clang/bin/clang" \
+            HOSTCC="$KERNELDIR/clang/bin/clang" \
+            HOSTCXX="$KERNELDIR/clang/bin/clang++" \
+            AR="$KERNELDIR/clang/bin/llvm-ar" \
+            NM="$KERNELDIR/clang/bin/llvm-nm" \
+            STRIP="$KERNELDIR/clang/bin/llvm-strip" \
+            OBJCOPY="$KERNELDIR/clang/bin/llvm-objcopy" \
+            OBJDUMP="$KERNELDIR/clang/bin/llvm-objdump" \
+            LLVM=1 LLVM_IAS=0 \
+            CROSS_COMPILE="$KERNELDIR/clang/bin/aarch64-linux-gnu-" \
+            CROSS_COMPILE_ARM32="$KERNELDIR/clang/bin/arm-linux-gnueabi-" \
+            Image.gz-dtb 2>&1 | tee out/build.log
+
+      - name: Package Kernel (AnyKernel3)
+        if: success()
+        run: |
+          git clone --depth=1 https://github.com/Kyura-Ground/AnyKernel3 -b 4.4 AnyKernel3
+          cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/
+
+      - name: Upload Artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lineage-4.4-${{ env.DEVICE_TARGET }}-${{ github.run_number }}
+          path: AnyKernel3/*
+          retention-days: 7
+
+      - name: Upload Build Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ env.DEVICE_TARGET }}
+          path: out/build.log
+          retention-days: 3
