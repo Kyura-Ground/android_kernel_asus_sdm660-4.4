@@ -1,0 +1,193 @@
+name: Compile Kernel for X00TD
+
+on:
+  workflow_dispatch:
+    inputs:
+      enable_ksu:
+        description: 'Enable KernelSU (1 = yes, 0 = no)'
+        required: true
+        default: '1'
+        type: choice
+        options:
+          - '1'
+          - '0'
+      kernel_name:
+        description: 'Kernel local version name (menggantikan "-perf" di CONFIG_LOCALVERSION)'
+        required: true
+        default: 'perf'
+
+jobs:
+  compile:
+    runs-on: ubuntu-22.04
+    env:
+      DEVICE_TARGET: X00TD
+      KBUILD_BUILD_USER: KenQ
+      KBUILD_BUILD_HOST: project
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Build Environment
+        run: |
+          # Update package manager
+          sudo apt-get update
+
+          # Install dependencies
+          sudo apt-get install -y \
+            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
+            gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi \
+            libarchive-tools \
+            --no-install-recommends
+
+          # Setup Clang toolchain (ZyCromerZ Clang 14.0.6)
+          export KERNELDIR="$(pwd)"
+          mkdir -p clang
+          curl -L "https://github.com/ZyCromerZ/Clang/releases/download/14.0.6-20260619-release/Clang-14.0.6-20260619.tar.gz" \
+            -o clang.tar.gz
+          tar -xzf clang.tar.gz -C clang
+          rm -f clang.tar.gz
+
+          # Verify clang installation
+          if ! [ -f "$KERNELDIR/clang/bin/clang" ]; then
+            echo "Clang setup failed! Aborting..."
+            exit 1
+          fi
+
+      - name: Run KernelSU setup
+        if: ${{ github.event.inputs.enable_ksu == '1' }}
+        run: |
+          curl -LSs "https://raw.githubusercontent.com/backslashxx/KernelSU/master/kernel/setup.sh" | bash -s master
+
+      - name: Set Kernel Local Version
+        run: |
+          KERNEL_VER=$(grep -m1 '^VERSION' Makefile | awk '{print $3}')
+          KERNEL_PATCH=$(grep -m1 '^PATCHLEVEL' Makefile | awk '{print $3}')
+          KERNEL_SUB=$(grep -m1 '^SUBLEVEL' Makefile | awk '{print $3}')
+          BUILD_DATE=$(date +%Y%m%d)
+          # Nama lengkap untuk ZIP & artifact (kernel sudah prepend versinya sendiri)
+          LOCAL_VERSION="${KERNEL_VER}.${KERNEL_PATCH}.${KERNEL_SUB}-${{ github.event.inputs.kernel_name }}-${BUILD_DATE}"
+          echo "Local version: $LOCAL_VERSION"
+          # CONFIG_LOCALVERSION hanya suffix, bukan full version
+          sed -i "s/CONFIG_LOCALVERSION=\".*\"/CONFIG_LOCALVERSION=\"-${{ github.event.inputs.kernel_name }}-${BUILD_DATE}\"/" arch/arm64/configs/X00TD_defconfig
+          echo "LOCAL_VERSION=${LOCAL_VERSION}" >> $GITHUB_ENV
+
+      - name: Compile Kernel
+        run: |
+          export KERNELDIR="$(pwd)"
+          export KBUILD_COMPILER_STRING=$($KERNELDIR/clang/bin/clang --version | head -n 1 | perl -pe 's/\(http.*?\)//gs' | sed -e 's/  */ /g' -e 's/[[:space:]]*$//')
+          echo "BUILD_START=$(date +%s)" >> $GITHUB_ENV
+          echo "COMPILER_STRING=${KBUILD_COMPILER_STRING}" >> $GITHUB_ENV
+
+          mkdir -p out
+
+          # Load defconfig
+          make O=out ARCH=arm64 \
+            LD="$KERNELDIR/clang/bin/ld.lld" \
+            CC="$KERNELDIR/clang/bin/clang" \
+            HOSTCC="$KERNELDIR/clang/bin/clang" \
+            HOSTCXX="$KERNELDIR/clang/bin/clang++" \
+            AR="$KERNELDIR/clang/bin/llvm-ar" \
+            NM="$KERNELDIR/clang/bin/llvm-nm" \
+            STRIP="$KERNELDIR/clang/bin/llvm-strip" \
+            OBJCOPY="$KERNELDIR/clang/bin/llvm-objcopy" \
+            OBJDUMP="$KERNELDIR/clang/bin/llvm-objdump" \
+            LLVM=1 LLVM_IAS=0 \
+            CROSS_COMPILE="$KERNELDIR/clang/bin/aarch64-linux-gnu-" \
+            CROSS_COMPILE_ARM32="$KERNELDIR/clang/bin/arm-linux-gnueabi-" \
+            X00TD_defconfig
+
+          # Compile
+          make -j$(nproc --all) O=out ARCH=arm64 \
+            LD="$KERNELDIR/clang/bin/ld.lld" \
+            CC="$KERNELDIR/clang/bin/clang" \
+            HOSTCC="$KERNELDIR/clang/bin/clang" \
+            HOSTCXX="$KERNELDIR/clang/bin/clang++" \
+            AR="$KERNELDIR/clang/bin/llvm-ar" \
+            NM="$KERNELDIR/clang/bin/llvm-nm" \
+            STRIP="$KERNELDIR/clang/bin/llvm-strip" \
+            OBJCOPY="$KERNELDIR/clang/bin/llvm-objcopy" \
+            OBJDUMP="$KERNELDIR/clang/bin/llvm-objdump" \
+            LLVM=1 LLVM_IAS=0 \
+            CROSS_COMPILE="$KERNELDIR/clang/bin/aarch64-linux-gnu-" \
+            CROSS_COMPILE_ARM32="$KERNELDIR/clang/bin/arm-linux-gnueabi-" \
+            Image.gz-dtb 2>&1 | tee out/build.log
+
+      - name: Package Kernel (AnyKernel3)
+        if: success()
+        run: |
+          git clone --depth=1 https://github.com/Kyura-Ground/AnyKernel3 -b 4.4 AnyKernel3
+          cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/
+
+      - name: Sign ZIP (ZipSigner)
+        if: success()
+        run: |
+          ZIP_NAME="${{ env.LOCAL_VERSION }}"
+          ZIPSIGNER_JAR="zipsigner.jar"
+
+          # Create ZIP from AnyKernel3
+          cd AnyKernel3
+          zip -r9 "../${ZIP_NAME}.zip" .
+          cd ..
+
+          # Download ZipSigner
+          wget -qO "${ZIPSIGNER_JAR}" "https://github.com/Magisk-Modules-Repo/zipsigner/raw/master/bin/zipsigner-3.0-dexed.jar"
+
+          # Sign ZIP
+          java -jar "${ZIPSIGNER_JAR}" "${ZIP_NAME}.zip" "${ZIP_NAME}-signed.zip"
+          rm -f "${ZIP_NAME}.zip"
+
+          echo "SIGNED_ZIP=${ZIP_NAME}-signed.zip" >> $GITHUB_ENV
+
+      - name: Upload to Pixeldrain
+        if: success()
+        run: |
+          RESPONSE=$(curl -sT "${{ env.SIGNED_ZIP }}" \
+            -u ":${{ secrets.PIXELDRAIN_API_KEY }}" \
+            https://pixeldrain.com/api/file/)
+          FILE_ID=$(echo "$RESPONSE" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
+          if [ -z "$FILE_ID" ]; then
+            echo "Pixeldrain upload failed: $RESPONSE"
+            exit 1
+          fi
+          echo "Pixeldrain link: https://pixeldrain.com/u/${FILE_ID}"
+
+      - name: Mirror to Telegram
+        if: success()
+        run: |
+          BUILD_END=$(date +%s)
+          ELAPSED=$(( BUILD_END - ${{ env.BUILD_START }} ))
+          HOURS=$(( ELAPSED / 3600 ))
+          MINUTES=$(( (ELAPSED % 3600) / 60 ))
+          SECONDS=$(( ELAPSED % 60 ))
+
+          BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          KSU_STATUS=$( [ "${{ github.event.inputs.enable_ksu }}" = "1" ] && echo "Enabled" || echo "Disabled" )
+          MD5=$(md5sum "${{ env.SIGNED_ZIP }}" | awk '{print $1}')
+
+          CAPTION="Build succeeded in ${HOURS}h ${MINUTES}m ${SECONDS}s
+          Device: ${{ env.DEVICE_TARGET }}
+          Branch: ${BRANCH}
+          KernelSU: ${KSU_STATUS}
+          md5: ${MD5}
+          Compiler: ${{ env.COMPILER_STRING }}"
+
+          curl -sF "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -F "document=@${{ env.SIGNED_ZIP }}" \
+            -F "caption=${CAPTION}" \
+            "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendDocument"
+
+      - name: Upload Artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.LOCAL_VERSION }}
+          path: ${{ env.SIGNED_ZIP }}
+          retention-days: 7
+
+      - name: Upload Build Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ env.DEVICE_TARGET }}
+          path: out/build.log
+          retention-days: 3
