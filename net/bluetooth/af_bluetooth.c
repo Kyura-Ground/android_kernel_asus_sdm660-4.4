@@ -237,8 +237,8 @@ restart:
 
 		/* FIXME: Is this check still needed */
 		if (sk->sk_state == BT_CLOSED) {
-			release_sock(sk);
 			bt_accept_unlink(sk);
+			release_sock(sk);
 			sock_put(sk);
 			continue;
 		}
