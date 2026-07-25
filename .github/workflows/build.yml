@@ -14,7 +14,7 @@ on:
       kernel_name:
         description: 'Kernel local version name (menggantikan "-perf" di CONFIG_LOCALVERSION)'
         required: true
-        default: 'perf'
+        default: 'perf-Z'
 
 jobs:
   compile:
@@ -23,9 +23,10 @@ jobs:
       DEVICE_TARGET: X00TD
       KBUILD_BUILD_USER: KenQ
       KBUILD_BUILD_HOST: project
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: Setup Build Environment
         run: |
@@ -36,10 +37,19 @@ jobs:
           sudo apt-get install -y \
             gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
             gcc-arm-linux-gnueabi binutils-arm-linux-gnueabi \
-            libarchive-tools zstd \
+            libarchive-tools zstd ccache \
             --no-install-recommends
 
-          # Setup Neutron Clang toolchain
+      - name: Cache Clang Toolchain
+        id: cache-clang
+        uses: actions/cache@v4
+        with:
+          path: clang
+          key: clang-neutron-30062026
+
+      - name: Setup Neutron Clang toolchain
+        if: steps.cache-clang.outputs.cache-hit != 'true'
+        run: |
           export KERNELDIR="$(pwd)"
           mkdir -p clang
           CLANG_URL="https://github.com/Neutron-Toolchains/clang-build-catalogue/releases/download/30062026/neutron-clang-30062026.tar.zst"
@@ -52,6 +62,14 @@ jobs:
             echo "Clang setup failed! Aborting..."
             exit 1
           fi
+
+      - name: Cache Ccache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-
 
       - name: Run KernelSU setup
         if: ${{ github.event.inputs.enable_ksu == '1' }}
@@ -78,14 +96,18 @@ jobs:
           echo "BUILD_START=$(date +%s)" >> $GITHUB_ENV
           echo "COMPILER_STRING=${KBUILD_COMPILER_STRING}" >> $GITHUB_ENV
 
+          # Configure ccache
+          ccache -M 5G
+          ccache -z
+
           mkdir -p out
 
           # Load defconfig
           make O=out ARCH=arm64 \
             LD="$KERNELDIR/clang/bin/ld.lld" \
-            CC="$KERNELDIR/clang/bin/clang" \
-            HOSTCC="$KERNELDIR/clang/bin/clang" \
-            HOSTCXX="$KERNELDIR/clang/bin/clang++" \
+            CC="ccache $KERNELDIR/clang/bin/clang" \
+            HOSTCC="ccache $KERNELDIR/clang/bin/clang" \
+            HOSTCXX="ccache $KERNELDIR/clang/bin/clang++" \
             AR="$KERNELDIR/clang/bin/llvm-ar" \
             NM="$KERNELDIR/clang/bin/llvm-nm" \
             STRIP="$KERNELDIR/clang/bin/llvm-strip" \
@@ -99,9 +121,9 @@ jobs:
           # Compile
           make -j$(nproc --all) O=out ARCH=arm64 \
             LD="$KERNELDIR/clang/bin/ld.lld" \
-            CC="$KERNELDIR/clang/bin/clang" \
-            HOSTCC="$KERNELDIR/clang/bin/clang" \
-            HOSTCXX="$KERNELDIR/clang/bin/clang++" \
+            CC="ccache $KERNELDIR/clang/bin/clang" \
+            HOSTCC="ccache $KERNELDIR/clang/bin/clang" \
+            HOSTCXX="ccache $KERNELDIR/clang/bin/clang++" \
             AR="$KERNELDIR/clang/bin/llvm-ar" \
             NM="$KERNELDIR/clang/bin/llvm-nm" \
             STRIP="$KERNELDIR/clang/bin/llvm-strip" \
@@ -111,6 +133,9 @@ jobs:
             CROSS_COMPILE="$KERNELDIR/clang/bin/aarch64-linux-gnu-" \
             CROSS_COMPILE_ARM32="$KERNELDIR/clang/bin/arm-linux-gnueabi-" \
             Image.gz-dtb 2>&1 | tee out/build.log
+
+          # Print ccache statistics
+          ccache -s
 
       - name: Package Kernel (AnyKernel3)
         if: success()
@@ -160,7 +185,7 @@ jobs:
           MINUTES=$(( (ELAPSED % 3600) / 60 ))
           SECONDS=$(( ELAPSED % 60 ))
 
-          BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          BRANCH="${{ github.ref_name }}"
           KSU_STATUS=$( [ "${{ github.event.inputs.enable_ksu }}" = "1" ] && echo "Enabled" || echo "Disabled" )
           MD5=$(md5sum "${{ env.SIGNED_ZIP }}" | awk '{print $1}')
 
@@ -191,3 +216,4 @@ jobs:
           name: build-log-${{ env.DEVICE_TARGET }}
           path: out/build.log
           retention-days: 3
+
