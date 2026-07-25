@@ -39,10 +39,10 @@ jobs:
             libarchive-tools \
             --no-install-recommends
 
-          # Setup Clang toolchain (ZyCromerZ Clang 14.0.6)
+          # Setup Clang toolchain (ZyCromerZ Clang 16.0.6)
           export KERNELDIR="$(pwd)"
           mkdir -p clang
-          curl -L "https://github.com/ZyCromerZ/Clang/releases/download/14.0.6-20260619-release/Clang-14.0.6-20260619.tar.gz" \
+          curl -L "https://github.com/ZyCromerZ/Clang/releases/download/16.0.6-20260716-release/Clang-16.0.6-20260716.tar.gz" \
             -o clang.tar.gz
           tar -xzf clang.tar.gz -C clang
           rm -f clang.tar.gz
