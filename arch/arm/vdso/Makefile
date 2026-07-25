@@ -14,7 +14,11 @@ VDSO_LDFLAGS += -Wl,-z,max-page-size=4096 -Wl,-z,common-page-size=4096
 VDSO_LDFLAGS += -nostdlib -shared
 VDSO_LDFLAGS += $(call cc-ldoption, -Wl$(comma)--hash-style=sysv)
 VDSO_LDFLAGS += $(call cc-ldoption, -Wl$(comma)--build-id)
+ifeq ($(cc-name),clang)
+VDSO_LDFLAGS += $(call cc-ldoption, -fuse-ld=lld)
+else
 VDSO_LDFLAGS += $(call cc-ldoption, -fuse-ld=bfd)
+endif
 
 obj-$(CONFIG_VDSO) += vdso.o
 extra-$(CONFIG_VDSO) += vdso.lds
