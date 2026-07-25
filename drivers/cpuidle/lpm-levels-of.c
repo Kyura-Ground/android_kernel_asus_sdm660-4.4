@@ -167,7 +167,7 @@ ssize_t lpm_enable_show(struct kobject *kobj, struct kobj_attribute *attr,
 				char *buf)
 {
 	int ret = 0;
-	struct kernel_param kp;
+	struct kernel_param kp = {0};
 
 	kp.arg = get_enabled_ptr(attr, get_avail_ptr(kobj, attr));
 	ret = param_get_bool(buf, &kp);
@@ -183,7 +183,7 @@ ssize_t lpm_enable_store(struct kobject *kobj, struct kobj_attribute *attr,
 				const char *buf, size_t len)
 {
 	int ret = 0;
-	struct kernel_param kp;
+	struct kernel_param kp = {0};
 	struct lpm_level_avail *avail;
 
 	avail = get_avail_ptr(kobj, attr);

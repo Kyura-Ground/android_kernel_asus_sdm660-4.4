@@ -2039,7 +2039,7 @@ static ssize_t vdd_rstr_en_store(struct kobject *kobj,
 	uint8_t en_cnt = 0;
 	uint8_t dis_cnt = 0;
 	uint32_t val = 0;
-	struct kernel_param kp;
+	struct kernel_param kp = {0};
 	struct vdd_rstr_enable *en = VDD_RSTR_ENABLE_FROM_ATTRIBS(attr);
 
 	mutex_lock(&vdd_rstr_mutex);
