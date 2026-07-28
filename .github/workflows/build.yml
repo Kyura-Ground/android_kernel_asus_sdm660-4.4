@@ -45,17 +45,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: clang
-          key: clang-neutron-30062026
+          key: clang-zycromerz-16.0.6-20260716
 
-      - name: Setup Neutron Clang toolchain
+      - name: Setup ZyCromerZ Clang toolchain
         if: steps.cache-clang.outputs.cache-hit != 'true'
         run: |
           export KERNELDIR="$(pwd)"
           mkdir -p clang
-          CLANG_URL="https://github.com/Neutron-Toolchains/clang-build-catalogue/releases/download/30062026/neutron-clang-30062026.tar.zst"
-          curl -L "$CLANG_URL" -o clang.tar.zst
-          tar -I zstd -xf clang.tar.zst -C clang
-          rm -f clang.tar.zst
+          CLANG_URL="https://github.com/ZyCromerZ/Clang/releases/download/16.0.6-20260716-release/Clang-16.0.6-20260716.tar.gz"
+          curl -L "$CLANG_URL" -o clang.tar.gz
+          tar -xf clang.tar.gz -C clang
+          rm -f clang.tar.gz
 
           # Verify clang installation
           if ! [ -f "$KERNELDIR/clang/bin/clang" ]; then
