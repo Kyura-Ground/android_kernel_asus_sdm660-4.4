@@ -207,7 +207,7 @@ static void do_input_boost_rem(struct work_struct *work)
 	}
 }
 
-void do_input_boost_max()
+void do_input_boost_max(void)
 {
 	unsigned int i;
 	struct cpu_sync *i_sync_info;
