@@ -5,7 +5,7 @@
 # A mix between the arm64 and arm vDSO Makefiles.
 
 ifeq ($(cc-name),clang)
-  CC_ARM32 := $(CC) $(CLANG_TARGET_ARM32) -no-integrated-as $(CLANG_GCC32_TC) $(CLANG_PREFIX32)
+  CC_ARM32 := $(CC) $(CLANG_TARGET_ARM32) $(CLANG_GCC32_TC) $(CLANG_PREFIX32)
   GCC_ARM32_TC := $(realpath $(dir $(shell which $(CROSS_COMPILE_ARM32)ld))/..)
 ifneq ($(GCC_ARM32_TC),)
   CC_ARM32 += --gcc-toolchain=$(GCC_ARM32_TC)
@@ -59,6 +59,7 @@ endif
 
 # From arm vDSO Makefile
 VDSO_CAFLAGS += -fPIC -fno-builtin -fno-stack-protector
+VDSO_CAFLAGS += -fomit-frame-pointer
 VDSO_CAFLAGS += -DDISABLE_BRANCH_PROFILING
 
 # Try to compile for ARMv8. If the compiler is too old and doesn't support it,
