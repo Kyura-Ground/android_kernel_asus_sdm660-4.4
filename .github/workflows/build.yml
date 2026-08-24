@@ -90,7 +90,6 @@ jobs:
           args=(
             ARCH=arm64
             O=out
-            LLVM_IAS=1
             CC="ccache clang"
             HOSTCC="ccache gcc"
             HOSTCXX="ccache g++"
