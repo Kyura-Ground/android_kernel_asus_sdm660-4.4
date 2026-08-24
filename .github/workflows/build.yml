@@ -43,8 +43,8 @@ jobs:
       - name: Pull toolchain
         run: |
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 -b lineage-17.1 aarch64-linux-android-4.9
-          wget "$(curl -s https://raw.githubusercontent.com/khuza08/snapdragon-clang/main/releases/link.txt)" -O "sdclang19.x.tgz"
-          rm -rf clang && mkdir sdclang && tar -xvf sdclang19.x.tgz -C sdclang
+          wget https://github.com/ZyCromerZ/Clang/releases/download/14.0.6-20260619-release/Clang-14.0.6-20260619.tar.gz -O clang.tar.gz
+          mkdir -p clang && tar -xf clang.tar.gz -C clang
 
       - name: Cache Ccache
         uses: actions/cache@v4
@@ -76,7 +76,7 @@ jobs:
         run: |
           export KBUILD_BUILD_USER="KenQ"
           export KBUILD_BUILD_HOST="project"
-          export PATH=$GITHUB_WORKSPACE/sdclang/bin:${PATH}
+          export PATH=$GITHUB_WORKSPACE/clang/bin:${PATH}
           export KBUILD_COMPILER_STRING=$(clang --version | head -n 1 | perl -pe 's/\(http.*?\)//gs' | sed -e 's/  */ /g' -e 's/[[:space:]]*$//')
           echo "BUILD_START=$(date +%s)" >> $GITHUB_ENV
           echo "COMPILER_STRING=${KBUILD_COMPILER_STRING}" >> $GITHUB_ENV
