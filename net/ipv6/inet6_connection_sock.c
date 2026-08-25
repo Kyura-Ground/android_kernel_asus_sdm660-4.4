@@ -26,6 +26,7 @@
 #include <net/ip6_route.h>
 #include <net/sock.h>
 #include <net/inet6_connection_sock.h>
+#include <net/sock_reuseport.h>
 
 int inet6_csk_bind_conflict(const struct sock *sk,
 			    const struct inet_bind_bucket *tb, bool relax)
@@ -48,6 +49,7 @@ int inet6_csk_bind_conflict(const struct sock *sk,
 			if ((!reuse || !sk2->sk_reuse ||
 			     sk2->sk_state == TCP_LISTEN) &&
 			    (!reuseport || !sk2->sk_reuseport ||
+			     rcu_access_pointer(sk->sk_reuseport_cb) ||
 			     (sk2->sk_state != TCP_TIME_WAIT &&
 			      !uid_eq(uid,
 				      sock_i_uid((struct sock *)sk2))))) {
@@ -87,7 +89,7 @@ struct dst_entry *inet6_csk_route_req(const struct sock *sk,
 	fl6->fl6_dport = ireq->ir_rmt_port;
 	fl6->fl6_sport = htons(ireq->ir_num);
 	fl6->flowi6_uid = sk->sk_uid;
-	security_req_classify_flow(req, flowi6_to_flowi(fl6));
+	security_req_classify_flow(req, flowi6_to_flowi_common(fl6));
 
 	dst = ip6_dst_lookup_flow(sock_net(sk), sk, fl6, final_p);
 	if (IS_ERR(dst))
@@ -136,7 +138,7 @@ static struct dst_entry *inet6_csk_route_socket(struct sock *sk,
 	fl6->fl6_sport = inet->inet_sport;
 	fl6->fl6_dport = inet->inet_dport;
 	fl6->flowi6_uid = sk->sk_uid;
-	security_sk_classify_flow(sk, flowi6_to_flowi(fl6));
+	security_sk_classify_flow(sk, flowi6_to_flowi_common(fl6));
 
 	rcu_read_lock();
 	final_p = fl6_update_dst(fl6, rcu_dereference(np->opt), &final);
