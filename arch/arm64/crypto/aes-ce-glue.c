@@ -65,7 +65,7 @@ static void aes_cipher_decrypt(struct crypto_tfm *tfm, u8 dst[], u8 const src[])
  * aes_sub() - use the aese instruction to perform the AES sbox substitution
  *             on each byte in 'input'
  */
-static u32 aes_sub(u32 input)
+static u32 __maybe_unused aes_sub(u32 input)
 {
 	u32 ret;
 
