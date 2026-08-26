@@ -602,7 +602,7 @@ static int synaptics_rmi4_i2c_remove(struct i2c_client *client)
 }
 
 static const struct i2c_device_id synaptics_rmi4_id_table[] = {
-	{I2C_DRIVER_NAME, 0},
+	{"syn_dsx_i2c", 0},
 	{},
 };
 MODULE_DEVICE_TABLE(i2c, synaptics_rmi4_id_table);
