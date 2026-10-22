@@ -1909,6 +1909,12 @@ struct device_node *_of_get_opp_desc_node(struct device *dev)
 	return of_parse_phandle(dev->of_node, "operating-points-v2", 0);
 }
 
+struct device_node *dev_pm_opp_of_get_opp_desc_node(struct device *dev)
+{
+	return _of_get_opp_desc_node(dev);
+}
+EXPORT_SYMBOL_GPL(dev_pm_opp_of_get_opp_desc_node);
+
 /* Initializes OPP tables based on new bindings */
 static int _of_add_opp_table_v2(struct device *dev, struct device_node *opp_np)
 {
