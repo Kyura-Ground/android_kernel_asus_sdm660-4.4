@@ -973,7 +973,6 @@ static enum power_supply_property smb2_batt_props[] = {
 	POWER_SUPPLY_PROP_CHARGE_FULL,
 	POWER_SUPPLY_PROP_CYCLE_COUNT,
 #ifdef CONFIG_MACH_ASUS_SDM660
-	POWER_SUPPLY_PROP_CHARGING_ENABLED,
 	POWER_SUPPLY_PROP_ADAPTER_ID,
 #endif
 };
@@ -997,16 +996,15 @@ static int smb2_batt_get_prop(struct power_supply *psy,
 		rc = smblib_get_prop_batt_present(chg, val);
 		break;
 	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
+#ifdef CONFIG_MACH_ASUS_SDM660
+		rc = smblib_get_prop_charging_enabled(chg, val);
+#else
 		val->intval = !get_effective_result(chg->chg_disable_votable);
+#endif
 		break;
 	case POWER_SUPPLY_PROP_INPUT_SUSPEND:
 		rc = smblib_get_prop_input_suspend(chg, val);
 		break;
-#ifdef CONFIG_MACH_ASUS_SDM660
-	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
-		rc = smblib_get_prop_charging_enabled(chg, val);
-		break;
-#endif
 	case POWER_SUPPLY_PROP_CHARGE_TYPE:
 		rc = smblib_get_prop_batt_charge_type(chg, val);
 		break;
@@ -1122,16 +1120,15 @@ static int smb2_batt_set_prop(struct power_supply *psy,
 
 	switch (prop) {
 	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
+#ifdef CONFIG_MACH_ASUS_SDM660
+		rc = smblib_set_prop_charging_enabled(chg, val);
+#else
 		vote(chg->chg_disable_votable, USER_VOTER, !!!val->intval, 0);
+#endif
 		break;
 	case POWER_SUPPLY_PROP_INPUT_SUSPEND:
 		rc = smblib_set_prop_input_suspend(chg, val);
 		break;
-#ifdef CONFIG_MACH_ASUS_SDM660
-	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
-		rc = smblib_set_prop_charging_enabled(chg, val);
-		break;
-#endif
 	case POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL:
 		rc = smblib_set_prop_system_temp_level(chg, val);
 		break;
