@@ -782,6 +782,7 @@ static int set_config(struct usb_composite_dev *cdev,
 	struct usb_gadget	*gadget = cdev->gadget;
 	struct usb_configuration *c = NULL;
 	int			result = -EINVAL;
+	unsigned		power = gadget_is_otg(gadget) ? 8 : 100;
 	int			tmp;
 
 	/*
@@ -895,6 +896,8 @@ static int set_config(struct usb_composite_dev *cdev,
 		}
 	}
 
+	/* Keep the requested configuration power for self-powered reporting. */
+	power = c->MaxPower ? c->MaxPower : CONFIG_USB_GADGET_VBUS_DRAW;
 done:
 	if (power > USB_SELF_POWER_VBUS_MAX_DRAW ||
 	    USB_VBUS_DRAW(gadget->speed) > USB_SELF_POWER_VBUS_MAX_DRAW ||
@@ -2415,6 +2418,7 @@ void composite_resume(struct usb_gadget *gadget)
 	struct usb_function		*f;
 	int ret;
 	unsigned long			flags;
+	unsigned			maxpower;
 
 	/* REVISIT:  should we have config level
 	 * suspend/resume callbacks?
