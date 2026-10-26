@@ -110,10 +110,11 @@ static struct ts_config *kmp_init(const void *pattern, unsigned int len,
 	 * kmp->pattern is stored immediately after the prefix_tbl[] table.
 	 * Reject lengths that would wrap while sizing either region.
 	 */
-	if (unlikely(check_mul_overflow(len, sizeof(*kmp->prefix_tbl),
+	if (unlikely(check_mul_overflow(len, (unsigned int)sizeof(*kmp->prefix_tbl),
 					&prefix_tbl_len) ||
 		     check_add_overflow(sizeof(*kmp), (size_t)len, &priv_size) ||
-		     check_add_overflow(priv_size, prefix_tbl_len, &priv_size)))
+		     check_add_overflow(priv_size, (size_t)prefix_tbl_len,
+					&priv_size)))
 		return ERR_PTR(-EINVAL);
 
 	conf = alloc_ts_config(priv_size, gfp_mask);
