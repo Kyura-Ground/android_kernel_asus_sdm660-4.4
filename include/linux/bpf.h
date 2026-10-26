@@ -21,7 +21,6 @@
 #include <linux/u64_stats_sync.h>
 #include <linux/refcount.h>
 #include <linux/mutex.h>
-#include <linux/module.h>
 #include <linux/kallsyms.h>
 
 struct bpf_verifier_env;
