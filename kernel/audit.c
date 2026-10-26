@@ -1580,7 +1580,7 @@ void audit_log_n_string(struct audit_buffer *ab, const char *string,
 	avail = skb_tailroom(skb);
 
 	/* enclosing quotes + null terminator */
-	if (check_add_overflow(slen, 3, &new_len)) {
+	if (check_add_overflow(slen, (size_t)3, &new_len)) {
 		audit_log_format(ab, "?");
 		return;
 	}
