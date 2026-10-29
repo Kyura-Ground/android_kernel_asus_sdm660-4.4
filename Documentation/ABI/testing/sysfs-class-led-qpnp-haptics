@@ -1,0 +1,9 @@
+What:		/sys/class/leds/vibrator/amplitude
+Date:		October 2026
+Contact:	ikwfahmi <mikhwanfahmi4@gmail.com>
+Description:
+		Read or set the QPNP haptics amplitude from 1 to 255.
+		255 preserves the configured voltage; smaller values scale it
+		down, subject to the PMIC's minimum voltage and voltage steps.
+		The configured vmax_mv and overdrive selection are retained.
+		Stopping vibration remains controlled by the activate node.
