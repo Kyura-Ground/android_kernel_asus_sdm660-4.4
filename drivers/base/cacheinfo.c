@@ -520,8 +520,11 @@ static int cacheinfo_cpu_callback(struct notifier_block *nfb,
 	unsigned int cpu = (unsigned long)hcpu;
 	int rc = 0;
 
-	switch (action & ~CPU_TASKS_FROZEN) {
+	/* Keep cache devices registered while their CPU parents are suspended. */
+	switch (action) {
 	case CPU_ONLINE:
+		if (cpumask_test_cpu(cpu, &cache_dev_map))
+			break;
 		rc = detect_cache_attributes(cpu);
 		if (!rc)
 			rc = cache_add_dev(cpu);
