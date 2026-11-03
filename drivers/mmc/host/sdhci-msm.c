@@ -5147,7 +5147,7 @@ static int sdhci_msm_suspend(struct device *dev)
 		(msm_host->mmc->slot.cd_irq >= 0))
 			disable_irq(msm_host->mmc->slot.cd_irq);
 
-	if (pm_runtime_suspended(dev)) {
+	if (pm_runtime_status_suspended(dev)) {
 		pr_debug("%s: %s: already runtime suspended\n",
 		mmc_hostname(host->mmc), __func__);
 		goto out;
@@ -5181,7 +5181,7 @@ static int sdhci_msm_resume(struct device *dev)
 		(msm_host->mmc->slot.cd_irq >= 0))
 			enable_irq(msm_host->mmc->slot.cd_irq);
 
-	if (pm_runtime_suspended(dev)) {
+	if (pm_runtime_status_suspended(dev)) {
 		pr_debug("%s: %s: runtime suspended, defer system resume\n",
 		mmc_hostname(host->mmc), __func__);
 		goto out;
