@@ -412,20 +412,26 @@ got_key:
 		res = -EINVAL;
 		goto out;
 	}
-	if (!cmpxchg(&ei->i_crypt_info, NULL, crypt_info)) {
+	if (cmpxchg(&ei->i_crypt_info, NULL, crypt_info)) {
 		if (fs_master_key) {
-			struct ext4_master_key *mk =
-				fs_master_key->payload.data[0];
-
-			refcount_inc(&mk->mk_refcount);
-			crypt_info->ci_fs_master_key = key_get(fs_master_key);
-			spin_lock(&mk->mk_decrypted_inodes_lock);
-			list_add(&crypt_info->ci_master_key_link,
-				 &mk->mk_decrypted_inodes);
-			spin_unlock(&mk->mk_decrypted_inodes_lock);
+			up_read(&fs_master_key->sem);
+			key_put(fs_master_key);
+			fs_master_key = NULL;
 		}
-		crypt_info = NULL;
+		ext4_free_crypt_info(crypt_info);
+		goto retry;
 	}
+	if (fs_master_key) {
+		struct ext4_master_key *mk = fs_master_key->payload.data[0];
+
+		refcount_inc(&mk->mk_refcount);
+		crypt_info->ci_fs_master_key = key_get(fs_master_key);
+		spin_lock(&mk->mk_decrypted_inodes_lock);
+		list_add(&crypt_info->ci_master_key_link,
+			 &mk->mk_decrypted_inodes);
+		spin_unlock(&mk->mk_decrypted_inodes_lock);
+	}
+	crypt_info = NULL;
 	res = 0;
 out:
 	if (fs_master_key) {
