@@ -2365,7 +2365,7 @@ static inline void ext4_fname_free_filename(struct ext4_filename *fname) { }
 
 /* crypto_keyring.c */
 #ifdef CONFIG_EXT4_FS_ENCRYPTION
-int __init ext4_init_keyring(void);
+int ext4_init_keyring(void);
 void ext4_exit_keyring(void);
 void ext4_free_keyring(struct super_block *sb);
 int ext4_ioctl_add_key(struct file *filp, void __user *arg);

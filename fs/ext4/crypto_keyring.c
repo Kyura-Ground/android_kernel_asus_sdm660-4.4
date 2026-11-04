@@ -18,6 +18,7 @@
  * Documentation/filesystems/ext4.txt for the supported v1 API.
  */
 
+#include <linux/init.h>
 #include <linux/key-type.h>
 #include <linux/mount.h>
 #include <linux/seq_file.h>
@@ -62,7 +63,8 @@ static int fscrypt_key_instantiate(struct key *key,
 
 static void fscrypt_key_destroy(struct key *key)
 {
-	free_master_key(key->payload.data[0]);
+	if (key_is_positive(key))
+		free_master_key(key->payload.data[0]);
 }
 
 static void fscrypt_key_describe(const struct key *key, struct seq_file *m)
