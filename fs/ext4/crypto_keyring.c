@@ -11,16 +11,16 @@
  *
  * - FS_IOC_ADD_ENCRYPTION_KEY
  * - FS_IOC_REMOVE_ENCRYPTION_KEY
+ * - FS_IOC_REMOVE_ENCRYPTION_KEY_ALL_USERS
  * - FS_IOC_GET_ENCRYPTION_KEY_STATUS
  *
- * See the "User API" section of Documentation/filesystems/fscrypt.rst for more
- * information about these ioctls.
+ * See the encryption key management section of
+ * Documentation/filesystems/ext4.txt for the supported v1 API.
  */
 
 #include <linux/key-type.h>
-#include <linux/seq_file.h>
-
 #include <linux/mount.h>
+#include <linux/seq_file.h>
 #include <linux/uaccess.h>
 
 #include "ext4.h"
@@ -289,7 +289,7 @@ out_unlock:
  * encrypted with it to appear "unlocked" (decrypted) when accessed.
  *
  * For more details, see the "FS_IOC_ADD_ENCRYPTION_KEY" section of
- * Documentation/filesystems/fscrypt.rst.
+ * Documentation/filesystems/ext4.txt.
  */
 int ext4_ioctl_add_key(struct file *filp, void __user *_uarg)
 {
@@ -443,7 +443,7 @@ static int try_to_lock_encrypted_files(struct super_block *sb,
 	/*
 	 * evict_dentries_for_decrypted_inodes() already iput() each inode in
 	 * the list; any inodes for which that dropped the last reference will
-	 * have been evicted due to fscrypt_drop_inode() detecting the key
+	 * have been evicted due to ext4_crypto_drop_inode() detecting the key
 	 * removal and telling the VFS to evict the inode.  So to finish, we
 	 * just need to check whether any inodes couldn't be evicted.
 	 */
@@ -466,7 +466,7 @@ static int try_to_lock_encrypted_files(struct super_block *sb,
  * alternatively can re-add the secret key again.
  *
  * For more details, see the "Removing keys" section of
- * Documentation/filesystems/fscrypt.rst.
+ * Documentation/filesystems/ext4.txt.
  */
 int ext4_ioctl_remove_key(struct file *filp, void __user *_uarg)
 {
@@ -546,7 +546,7 @@ int ext4_ioctl_remove_key(struct file *filp, void __user *_uarg)
  * absent or present).
  *
  * For more details, see the "FS_IOC_GET_ENCRYPTION_KEY_STATUS" section of
- * Documentation/filesystems/fscrypt.rst.
+ * Documentation/filesystems/ext4.txt.
  */
 int ext4_ioctl_get_key_status(struct file *filp, void __user *uarg)
 {

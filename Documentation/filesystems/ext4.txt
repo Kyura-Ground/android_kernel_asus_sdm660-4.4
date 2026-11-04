@@ -627,3 +627,45 @@ useful links:	http://fedoraproject.org/wiki/ext3-devel
 		http://www.bullopensource.org/ext4/
 		http://ext4.wiki.kernel.org/index.php/Main_Page
 		http://fedoraproject.org/wiki/Features/Ext4
+
+Encryption key management (Qualcomm ext4 backport)
+================================================
+
+The legacy ext4 encryption driver accepts filesystem-level keys for v1
+policies through FS_IOC_ADD_ENCRYPTION_KEY, FS_IOC_REMOVE_ENCRYPTION_KEY,
+FS_IOC_REMOVE_ENCRYPTION_KEY_ALL_USERS and FS_IOC_GET_ENCRYPTION_KEY_STATUS.
+Their fixed-width argument layouts are declared in include/uapi/linux/fs.h
+and work with native and compat callers.
+
+Only raw, descriptor-based v1 keys are supported. Identifier-based v2 keys,
+key IDs, wrapped-key flags and nonzero reserved input fields are rejected.
+Adding or removing a v1 key requires CAP_SYS_ADMIN. Querying status does not.
+Both removal forms are equivalent for these privileged, global v1 keys.
+The subscribed logon-keyring lookup remains available for older userspace.
+The existing Qualcomm ICE key derivation and on-disk context are unchanged;
+this backport does not convert userdata or introduce metadata encryption.
+
+Keys belong to the mounted filesystem. Removal immediately wipes the master
+secret and attempts to evict unlocked inodes. Busy files retain their per-file
+keys until they can be evicted; the removal flags and key status report this
+incomplete state. A later removal retries eviction, and re-adding the same
+secret can restore the key while files are still busy. Dirty inodes are not
+forcibly discarded. Unmount releases the filesystem's keyring.
+
+Userspace regression test:
+
+  make -C tools/testing/selftests/fscrypt
+  tools/testing/selftests/fscrypt/fscrypt_keyring
+
+This builds a userspace program only and checks ABI sizes and ioctl numbers.
+To exercise the implementation, run the following as root with this kernel
+on a disposable ext4 filesystem created with the encryption feature enabled:
+
+  tools/testing/selftests/fscrypt/fscrypt_keyring --live /mnt/fscrypt-scratch
+
+The live test creates its own temporary encrypted directory and disposable
+key. It checks invalid inputs, privilege enforcement, actual file key lookup,
+busy removal, clean inode eviction, re-addition and data readability. A failed
+live test may leave its temporary files or key until the scratch filesystem
+is unmounted. ABI checks alone do not validate kernel behavior or ICE I/O;
+test the built kernel and Android boot separately.

@@ -3,6 +3,7 @@ TARGETS += cpu-hotplug
 TARGETS += efivarfs
 TARGETS += exec
 TARGETS += firmware
+TARGETS += fscrypt
 TARGETS += ftrace
 TARGETS += futex
 TARGETS += kcmp

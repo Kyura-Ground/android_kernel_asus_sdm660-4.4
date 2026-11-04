@@ -329,7 +329,7 @@ retry:
 			res = -ENOKEY;
 			goto out;
 		}
-		res = ext4_derive_key(&ctx, mk->mk_secret.raw,
+		res = ext4_derive_key(&ctx, (const char *)mk->mk_secret.raw,
 				      crypt_info->ci_raw_key);
 		if (res)
 			goto out;
