@@ -414,12 +414,17 @@ static inline struct mtp_dev *func_to_mtp(struct usb_function *f)
 static struct usb_request *mtp_request_new(struct usb_ep *ep, int buffer_size)
 {
 	struct usb_request *req = usb_ep_alloc_request(ep, GFP_KERNEL);
+	gfp_t flags = GFP_KERNEL;
 
 	if (!req)
 		return NULL;
 
+	/* Large bulk buffers already fall back to MTP_BULK_BUFFER_SIZE. */
+	if (buffer_size > MTP_BULK_BUFFER_SIZE)
+		flags |= __GFP_NORETRY | __GFP_NOWARN;
+
 	/* now allocate buffers for the requests */
-	req->buf = kmalloc(buffer_size, GFP_KERNEL);
+	req->buf = kmalloc(buffer_size, flags);
 	if (!req->buf) {
 		usb_ep_free_request(ep, req);
 		return NULL;
