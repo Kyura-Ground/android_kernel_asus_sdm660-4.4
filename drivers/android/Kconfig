@@ -19,6 +19,18 @@ config ANDROID_BINDER_IPC
 	  Android process, using Binder to identify, invoke and pass arguments
 	  between said processes.
 
+config ANDROID_BINDERFS
+	bool "Android Binderfs filesystem"
+	depends on ANDROID_BINDER_IPC
+	default n
+	help
+	  Mount binderfs to create isolated binder devices and expose supported
+	  driver features. With this enabled the default devices are created
+	  in each binderfs mount instead of as misc devices.
+
+	  Android init must mount it before services open binder devices.
+	  Say N to retain the legacy misc-device registration.
+
 config ANDROID_BINDER_DEVICES
 	string "Android Binder devices"
 	depends on ANDROID_BINDER_IPC

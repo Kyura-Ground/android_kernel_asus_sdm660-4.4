@@ -65,6 +65,7 @@
 
 #define V9FS_MAGIC		0x01021997
 
+#define BINDERFS_SUPER_MAGIC	0x6c6f6f70
 #define BDEVFS_MAGIC            0x62646576
 #define BINFMTFS_MAGIC          0x42494e4d
 #define DEVPTS_SUPER_MAGIC	0x1cd1

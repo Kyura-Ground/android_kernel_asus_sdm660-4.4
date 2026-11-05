@@ -1,0 +1,105 @@
+Binder freeze notifications on 4.4
+=================================
+
+Scope
+-----
+
+This backport supplies BINDER_FREEZE, BINDER_GET_FROZEN_INFO, frozen async
+transaction reporting, and freeze-state subscriptions. It preserves the
+upstream command numbers, including the unused BR_ONEWAY_SPAM_SUSPECT slot.
+It does not implement or advertise oneway spam detection or extended errors.
+
+CONFIG_ANDROID_BINDERFS enables binderfs and its freeze_notification feature
+file. X00TD_defconfig enables it. Android init must mount binderfs before
+opening Binder and use the devices under that mount. Android's standard
+init.rc mounts it at /dev/binderfs with stats=global and creates the usual
+/dev/{binder,hwbinder,vndbinder} symlinks. With ANDROID_BINDERFS disabled,
+the existing misc devices are registered instead.
+
+This is the Binder part of freezing, not a cgroup v2 freezer backport. Keep
+the device's sensor-freeze aconfig override until a rebuilt kernel has passed
+runtime validation. Do not enable the cached-app freezer solely because this
+feature file exists. This change does not modify framework or device policy.
+
+Origins and adaptations
+-----------------------
+
+The implementation is adapted from upstream Linux and Android common:
+
+  432ff1e91694e4c55a5bf6bc0574f4c254970232 BINDER_FREEZE
+  0567461a7a6e return pending info for frozen async transactions
+  d579b04a52a183db47dfcb7a44304d7747d551e1 frozen notification
+  30b968b002a92870325a5c9d1ce78eba0ce386e7 binderfs feature flag
+  3ad20fe393b31025bebfc2d76964561f65df48aa binderfs foundation
+
+Freeze notification lifetime fixes are included:
+
+  dc8aea47b928 hold a temporary node reference during notification traversal
+  011e69a1b230 stop traversal when the owning process dies
+  7e20434cbca8 retain notification ownership until reference cleanup
+  ca63c66935b9 allow subscriptions to dead nodes
+  1db76ec2b4b2 drain delivered_freeze at process exit
+  1aa3aaf8953c free pending transaction and clear-notification work at exit
+
+The in-file-structure adaptation follows Eureka-Kernel-R24U commit
+26c6aa16da8e40c3815bd2f029c66b699fc8eddf (HyperRamzey). The freezer helpers
+also follow Android common's android14-6.1 implementation. This is an adapted
+backport, not an unchanged cherry-pick. Original authors include Marco
+Ballesio, Todd Kjos, Yu-Ting Tseng, and Christian Brauner.
+
+Local adaptations retain this driver's priority handling, atomic temporary
+process references, and kzalloc/kfree ownership. Binderfs uses the 4.4 VFS
+rename2/mount_nodev APIs and ida_simple_get/remove. Device references span
+inode eviction and deferred process release. Allocation failures return their
+minor and device-count reservations. The control device is excluded from
+the per-mount max= limit. The binderfs UAPI uses 32-bit major/minor fields.
+Only common device/context types move into binder_internal.h.
+
+Host validation (no kernel build)
+--------------------------------
+
+From the kernel source root:
+
+  python3 tools/testing/binder/freeze_host_test.py
+
+This compiles extracted driver functions with host stubs and the exact UAPI
+headers. It checks 32-bit and 64-bit Binder ABI layouts, statistics bounds,
+frozen sync rejection, pending async reporting, outstanding transaction
+draining, pending outgoing replies, allocation/copy failure, duplicate/invalid
+subscriptions, cookie checks, and ack/clear/dead-node ownership transitions.
+The original transaction function fails the frozen-sync assertion.
+
+These tests do not check kernel compilation, real locking, memory barriers,
+mount/unmount races, or scheduling. They are not device selftests.
+
+Runtime acceptance after a server build
+---------------------------------------
+
+After booting a separately built test kernel, check:
+
+  cat /dev/binderfs/features/freeze_notification
+  readlink /dev/binder
+  ls -l /dev/binderfs/{binder,hwbinder,vndbinder,binder-control}
+
+The feature must read 1. The normal Binder services must start, and SELinux
+must remain Enforcing. Verify binder_logs/{stats,state,transactions,proc}
+under /dev/binderfs and exercise process death while watches are outstanding.
+
+Use the ROM's existing native tests; do not substitute a fake feature file:
+
+  m binderDriverInterfaceTest binderLibTest
+
+On the test device, run binderDriverInterfaceTest with:
+
+  --gtest_filter=BinderDriverInterfaceTest.*FrozenNotification
+
+RequestFrozenNotification, OverwritePendingFrozenNotification, and
+ResendFrozenNotification must execute and pass (no skips). Also run the
+ordinary Binder transaction/death tests and repeat the notification tests
+while processes exit. Check kernel logs for UAFs, refcount warnings, lock
+warnings, negative outstanding_txns, and leaked freeze objects in Binder stats.
+
+BinderLibTest's Freeze*, *Frozen*, and related end-to-end tests additionally
+require working cgroup v2 freezer support; skips on this 4.4 tree do not prove
+that end-to-end freezing works. Keep the stable kernel and sensor override
+until runtime acceptance is complete.
