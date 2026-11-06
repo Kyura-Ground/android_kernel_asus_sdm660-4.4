@@ -57,6 +57,9 @@
 #ifdef CONFIG_MACH_ASUS_SDM660
 extern struct smb_charger *smbchg_dev;
 extern struct timespec last_jeita_time;
+#ifdef CONFIG_BYPASS_CHARGING_X00TD
+static int bypass_charging = 0;
+#endif
 static struct alarm bat_alarm;
 extern struct gpio_control *global_gpio;
 static int ASUS_ADAPTER_ID;
@@ -1676,11 +1679,22 @@ int smblib_vbus_regulator_is_enabled(struct regulator_dev *rdev)
  ********************/
 
 int smblib_get_prop_input_suspend(struct smb_charger *chg,
-				  union power_supply_propval *val)
+			  union power_supply_propval *val)
 {
+#ifdef CONFIG_BYPASS_CHARGING_X00TD
+	if ((get_client_vote(chg->chg_disable_votable, BYPASS_VOTER) == 1)) {
+		val->intval = 1;  /* Bypass active = suspend input */
+	} else if (bypass_charging) {
+		val->intval = 2;  /* Bypass pending state */
+	} else {
+		val->intval = (get_client_vote(chg->usb_icl_votable, USER_VOTER) == 0)
+				   && get_client_vote(chg->dc_suspend_votable, USER_VOTER);
+	}
+#else
 	val->intval
 		= (get_client_vote(chg->usb_icl_votable, USER_VOTER) == 0)
 		 && get_client_vote(chg->dc_suspend_votable, USER_VOTER);
+#endif
 	return 0;
 }
 
@@ -1996,8 +2010,32 @@ int smblib_get_prop_from_bms(struct smb_charger *chg,
  ***********************/
 
 int smblib_set_prop_input_suspend(struct smb_charger *chg,
-				  const union power_supply_propval *val)
+			  const union power_supply_propval *val)
 {
+#ifdef CONFIG_BYPASS_CHARGING_X00TD
+	int rc = 0;
+
+	vote(chg->input_suspend_votable, USER_VOTER, false, 0);
+
+	if (val->intval == 1) {
+		/* Enable hard bypass: disable charging */
+		rc = vote(chg->chg_disable_votable, BYPASS_VOTER, 1, 0);
+		bypass_charging = 0;
+	} else if (val->intval == 2) {
+		/* Enable soft bypass: thermal monitoring active */
+		rc = vote(chg->chg_disable_votable, BYPASS_VOTER, 0, 0);
+		bypass_charging = 1;
+	} else {
+		/* Disable bypass: resume normal charging */
+		rc = vote(chg->chg_disable_votable, BYPASS_VOTER, 0, 0);
+		bypass_charging = 0;
+	}
+	
+	if (rc < 0) {
+		smblib_err(chg, "Couldn't vote bypass rc=%d\n", rc);
+		return rc;
+	}
+#else
 	int rc;
 
 	/* vote 0mA when suspended */
@@ -2014,6 +2052,7 @@ int smblib_set_prop_input_suspend(struct smb_charger *chg,
 			(bool)val->intval ? "suspend" : "resume", rc);
 		return rc;
 	}
+#endif
 
 	power_supply_changed(chg->batt_psy);
 	return rc;
@@ -2026,6 +2065,12 @@ int smblib_set_prop_charging_enabled(struct smb_charger *chg,
 	int rc;
 
 	/* vote 0mA when suspended */
+#ifdef CONFIG_BYPASS_CHARGING_X00TD
+	if (bypass_charging) {
+		/* Skip suspend logic when bypass active */
+		return 0;
+	}
+#endif
 	rc = vote(chg->usb_icl_votable, USER_VOTER, !(bool)val->intval, 0);
 	if (rc < 0) {
 		smblib_err(chg, "Couldn't vote to %s USB rc=%d\n",
