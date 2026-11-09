@@ -10,6 +10,10 @@
 #define pr_fmt(fmt) "genirq: " fmt
 
 #include <linux/irq.h>
+#include <linux/cpu.h>
+#include <linux/jiffies.h>
+#include <linux/notifier.h>
+#include <linux/workqueue.h>
 #include <linux/kthread.h>
 #include <linux/module.h>
 #include <linux/random.h>
@@ -1209,6 +1213,44 @@ void reaffine_perf_irqs(void)
 	}
 	raw_spin_unlock_irqrestore(&perf_irqs_lock, outer_flags);
 }
+
+/*
+ * Perf-critical IRQs can be requested before all of the performance CPUs are
+ * online, in which case the affinity change gets rejected and the IRQ stays on
+ * the wrong cluster. Retry the affinity change every time a CPU comes online.
+ */
+static int perf_irqs_cpu_notify(struct notifier_block *self,
+				unsigned long action, void *hcpu)
+{
+	if (action == CPU_ONLINE)
+		reaffine_perf_irqs();
+
+	return NOTIFY_OK;
+}
+
+static struct notifier_block perf_irqs_cpu_nb = {
+	.notifier_call = perf_irqs_cpu_notify
+};
+
+/*
+ * The performance CPUs can also be brought up before this notifier is
+ * registered, in which case no CPU_ONLINE event is seen at all. Retry once
+ * after boot has settled so the IRQs always end up on the right cluster.
+ */
+static void perf_irqs_reaffine_work(struct work_struct *work)
+{
+	reaffine_perf_irqs();
+}
+
+static DECLARE_DELAYED_WORK(perf_irqs_reaffine, perf_irqs_reaffine_work);
+
+static int __init perf_irqs_init(void)
+{
+	register_cpu_notifier(&perf_irqs_cpu_nb);
+	schedule_delayed_work(&perf_irqs_reaffine, 20 * HZ);
+	return 0;
+}
+core_initcall(perf_irqs_init);
 
 /*
  * Internal function to register an irqaction - typically used to
