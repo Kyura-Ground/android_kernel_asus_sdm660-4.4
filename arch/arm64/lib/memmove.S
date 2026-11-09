@@ -59,6 +59,7 @@ D_h	.req	x14
 
 ENTRY(__memmove)
 WEAK(memmove)
+	prfm	pldl1strm, [src, #L1_CACHE_BYTES]
 	cmp	dstin, src
 	b.lo	__memcpy
 	add	tmp1, src, count
@@ -172,6 +173,8 @@ WEAK(memmove)
 	ldp	B_l, B_h, [src, #-32]
 	ldp	C_l, C_h, [src, #-48]
 	ldp	D_l, D_h, [src, #-64]!
+	/* Prefetch 4 lines in the direction the copy is moving (downwards) */
+	prfm	pldl1strm, [src, #-(4*L1_CACHE_BYTES)]
 1:
 	/*
 	* interlace the load of next 64 bytes data block with store of the last

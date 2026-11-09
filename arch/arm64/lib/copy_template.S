@@ -51,6 +51,7 @@ C_h	.req	x12
 D_l	.req	x13
 D_h	.req	x14
 
+	prfm	pldl1strm, [src, #(1*L1_CACHE_BYTES)]
 	mov	dst, dstin
 	cmp	count, #16
 	/*When memory length is less than 16, the accessed are not aligned.*/
@@ -168,6 +169,7 @@ D_h	.req	x14
 	ldp1	B_l, B_h, src, #16
 	ldp1	C_l, C_h, src, #16
 	ldp1	D_l, D_h, src, #16
+	prfm	pldl1strm, [src, #(4*L1_CACHE_BYTES)]
 1:
 	/*
 	* interlace the load of next 64 bytes data block with store of the last
