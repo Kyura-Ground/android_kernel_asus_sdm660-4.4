@@ -43,7 +43,7 @@ config ANDROID_BINDER_IPC_SELFTEST
 
 config ANDROID_SIMPLE_LMK
 	bool "Simple Android Low Memory Killer"
-	depends on !ANDROID_LOW_MEMORY_KILLER && !MEMCG
+	depends on !ANDROID_LOW_MEMORY_KILLER
 	---help---
 	  This is a complete low memory killer solution for Android that is
 	  small and simple. Processes are killed according to the priorities
@@ -51,6 +51,10 @@ config ANDROID_SIMPLE_LMK
 	  always killed first. Processes are killed until memory deficits are
 	  satisfied, as observed from kswapd struggling to free up pages. Simple
 	  LMK stops killing processes when kswapd finally goes back to sleep.
+
+	  Memory cgroups are allowed to be enabled at the same time: userspace
+	  lmkd uses them for swap accounting only, so reclaim still happens
+	  against the root memcg and the vmpressure signal stays global.
 
 if ANDROID_SIMPLE_LMK
 
