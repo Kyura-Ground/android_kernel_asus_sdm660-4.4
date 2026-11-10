@@ -499,6 +499,8 @@ static struct icnss_priv {
 	u16 line_number;
 	char function_name[QMI_WLFW_FUNCTION_NAME_LEN_V01 + 1];
 	struct completion unblock_shutdown;
+	struct delayed_work fw_boot_retry_work;
+	u8 fw_boot_retry_count;
 	bool is_ssr;
 } *penv;
 
@@ -3660,6 +3662,58 @@ out:
 }
 EXPORT_SYMBOL(icnss_trigger_recovery);
 
+/*
+ * On this platform the WLAN protection domain (wlan_pd) is owned by the modem
+ * firmware, and nothing in icnss retries its bring-up. When the modem fails to
+ * start wlan_pd, WLFW never registers with the IPC router and wlan0 stays
+ * missing for the whole boot. Poll for the WLFW QMI service and ask the root PD
+ * to restart wlan_pd until it shows up.
+ */
+#define ICNSS_FW_BOOT_RETRY_MAX 3
+#define ICNSS_FW_BOOT_RETRY_DELAY_MS 40000
+
+static void icnss_fw_boot_retry_work(struct work_struct *work)
+{
+	struct icnss_priv *priv = container_of(work, struct icnss_priv,
+					       fw_boot_retry_work.work);
+	int ret;
+
+	if (priv->magic != ICNSS_MAGIC)
+		return;
+
+	if (test_bit(ICNSS_WLFW_QMI_CONNECTED, &priv->state)) {
+		icnss_pr_dbg("WLFW QMI connected, stop FW boot retry\n");
+		return;
+	}
+
+	if (priv->fw_boot_retry_count >= ICNSS_FW_BOOT_RETRY_MAX) {
+		icnss_pr_err("WLAN FW still down after %d PD restarts, state: 0x%lx\n",
+			     priv->fw_boot_retry_count, priv->state);
+		return;
+	}
+
+	if (test_bit(ICNSS_PD_RESTART, &priv->state) ||
+	    !test_bit(ICNSS_PDR_REGISTERED, &priv->state) ||
+	    !priv->service_notifier || !priv->service_notifier[0].handle)
+		goto resched;
+
+	priv->fw_boot_retry_count++;
+	icnss_pr_err("WLAN FW not up, restarting wlan_pd (attempt %d/%d), state: 0x%lx\n",
+		     priv->fw_boot_retry_count, ICNSS_FW_BOOT_RETRY_MAX,
+		     priv->state);
+
+	ret = service_notif_pd_restart(priv->service_notifier[0].name,
+				       priv->service_notifier[0].instance_id);
+	if (ret)
+		icnss_pr_err("wlan_pd restart request failed: %d\n", ret);
+	else
+		set_bit(ICNSS_HOST_TRIGGERED_PDR, &priv->state);
+
+resched:
+	schedule_delayed_work(&priv->fw_boot_retry_work,
+			      msecs_to_jiffies(ICNSS_FW_BOOT_RETRY_DELAY_MS));
+}
+
 int icnss_idle_shutdown(struct device *dev)
 {
 	struct icnss_priv *priv = dev_get_drvdata(dev);
@@ -4824,6 +4878,10 @@ static int icnss_probe(struct platform_device *pdev)
 
 	icnss_enable_recovery(priv);
 
+	INIT_DELAYED_WORK(&priv->fw_boot_retry_work, icnss_fw_boot_retry_work);
+	schedule_delayed_work(&priv->fw_boot_retry_work,
+			      msecs_to_jiffies(ICNSS_FW_BOOT_RETRY_DELAY_MS));
+
 	icnss_debugfs_create(priv);
 
 	ret = device_init_wakeup(&priv->pdev->dev, true);
@@ -4852,6 +4910,8 @@ out:
 static int icnss_remove(struct platform_device *pdev)
 {
 	icnss_pr_info("Removing driver: state: 0x%lx\n", penv->state);
+
+	cancel_delayed_work_sync(&penv->fw_boot_retry_work);
 
 	device_init_wakeup(&penv->pdev->dev, false);
 
